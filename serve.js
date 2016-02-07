@@ -3,11 +3,12 @@
 
 var when = {
     connected: function(socket){
-        console.log(socket.id);
+        console.log(socket + ' connected');
         return 0;
     },
-    chat: function(rtt){sock.ets.to(rtt.id).emit('chat', rtt.txt);},
-    disconnect: function(){return;},
+    chat: function(text){sock.ets.emit('chat', text);},
+    disconnect: function(socket){console.log(socket + ' disconnected');},
+    go: function(){sock.ets.emit('go');},
 }
 
 var sock = {
@@ -15,9 +16,9 @@ var sock = {
     listen: function(server){
         sock.ets = sock.ets(server);
         sock.ets.on('connection', function(socket){
-            var nfo = when.connected(socket);
+            var nfo = when.connected(socket.id);
             socket.on('chat', when.chat);
-
+            socket.on('go', when.go);
             socket.on('disconnect', when.disconnect);
         });
     },
