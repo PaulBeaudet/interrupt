@@ -11,30 +11,19 @@ var NUM_TIMERS = NUM_ENTRIES + 1; // timer 6 is for the send button
 var SEND_TIMER = NUM_ENTRIES;
 
 var hist = {
-    row: 0,
-    current: '',
+    row: 0,                                                      // notes history row being typed in
+    active: false,                                               // notes weather someone is typing
+    start: function(){                                           // prep elements
+        for(var row = 0; row < NUM_ENTRIES; row++){              // remove everything that was on topic screen
+            $('#button' + row).css('visibility', 'hidden');      // hide buttons
+            $('#timer' + row).css('visibility', 'visible');      // make timers visible
+            $('#dialog' + row).html('');                         // clear previous hist
+        }
+    },
     increment: function(){ // decides with row to edit to and when the dialog needs to scoot up
         if(hist.row < NUM_ENTRIES - 2)         { hist.row++; }
         else if ( hist.row === NUM_ENTRIES - 2){ hist.row = NUM_ENTRIES - 1; }
         else if ( hist.row < NUM_ENTRIES + 1)  { hist.scoot(); }
-    },
-     onStart: function(){ // called when starting a message
-        if(hist.row === NUM_ENTRIES){
-            hist.scoot();
-            hist.row--;
-        }  // checks to see if a scoot is needed upon typing
-        time.from(hist.row, sock.id);
-    },
-    type: function(text){console.log(text);},
-    start: function(){
-        for(var row = 0; row < NUM_ENTRIES; row++){           // remove everything that was on topic screen
-            $('#button' + row).css('visibility', 'hidden');   // hide buttons
-            $('#dialog' + row).html('');                      // clear previous hist
-        }
-    },
-    myTurn: function(){
-        time.from(hist.row, OTHER); // write other onto the last row
-        edit.increment();              // increment place to write to
     },
     scoot: function(){
         for(var i = 1; i < NUM_ENTRIES; i++){
@@ -43,44 +32,66 @@ var hist = {
         }
         $( '#dialog' + (NUM_ENTRIES - 1) ).html('');
         $( '#timer' + (NUM_ENTRIES -1) ).html('');
-    }
+    },
+    chat: function(rtt){
+        $('#dialog' + hist.row).html(rtt.text);               // incomming chat dialog
+        $('#timer' + hist.row).html(rtt.id ? rtt.id : '???'); // set id of incoming message
+    },
+    open: function(rtt){
+        if(hist.row === NUM_ENTRIES){ hist.scoot(); }
+        else{ hist.increment(); }
+        hist.chat(rtt);
+    },
 }
 
 var send = {
     block: true,
-    allow: function(){send.block = false;},
+    justTyped: false,
+    go: function(rtt){
+        if(check.timer){clearTimeout(check.timer);}
+        check.timer = setTimeout(check.forMyTurn, SECOND);
+        hist.open(rtt);
+    },
     input: function(){
-        if(send.block){$('#textEntry').val('');}
+        if(send.block || send.justTyped){$('#textEntry').val('');} // block input
         else{
             var text = $('#textEntry').val();
-            if(text[text.length-1] === ' '){
+            if(text[text.length-1] === ' '){    // if the last letter is equal to space
+                hist.chat(text);
                 sock.et.emit("chat", text);
             }
         }
     },
     pass: function(){
         if(!send.block){
-            time.curtsy();
-            sock.et.emit('done', $('#textEntry').val());
+            send.justTyped = true;                     // we just typed something give others a chance
+            sock.et.emit('go', $('#textEntry').val()); // signify to our friends they can take the helm
         }
     },
     enter: function(event){if(!send.block && event.which === 13){send.pass();}}
 }
 
-var time = {
-    curtsy: function(){},
-    from: function(whichRow, who){ // replaces time span elemement with perspective of user
-        $('#timer' + whichRow).css('visibility', 'visible');
-        $('#timer' + whichRow).html(who);               // which perspective is this
-    }, // Should probably be done with a seperate element but for the sake of simplicity this one is reused
+var ALLOWENCE = 45;    // total before passing the helm forcably
+var OPEN_HELM = 30;    // time before helm can be taken by interuption
+var COURTESY = 4;      // double dip moritorium i.e. if no one else takes the helm after you talked you can talk again
+var PAUSE_TIMEOUT = 4; // inactivity timeout
+
+var check = {
+    timer: 0,
+    elapsed: 0,
+    forMyTurn: function(){
+        check.elapsed++; // decrement time
+        if(check.elapsed > OPEN_HELM){send.block = false;}
+        if(check.elapsed > COURTESY){send.justTyped = false;}
+    },
 }
 
 var sock = {
     et: io(),
     id: 'me',
     init: function(){
-        sock.et.on('chat', hist.type);
-        sock.et.on('go', send.allow);
+        sock.et.on('chat', hist.chat);
+        sock.et.on('go', send.go);
     }
 }
 

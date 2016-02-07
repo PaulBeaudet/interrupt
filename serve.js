@@ -2,13 +2,24 @@
 // This a test for app for helping strangers connect through RTT services
 
 var when = {
+    idle: true,
+    users: 0,
     connected: function(socket){
         console.log(socket + ' connected');
+        when.users++;
+        if(when.users > 2 && when.idle){
+            sock.ets.emit('go', {text: 'start typing!', id: 'bot'});
+            when.idle = false;
+        }
         return 0;
     },
     chat: function(text){sock.ets.emit('chat', text);},
-    disconnect: function(socket){console.log(socket + ' disconnected');},
-    go: function(){sock.ets.emit('go');},
+    disconnect: function(socket){
+        console.log(socket + ' disconnected');
+        when.users--;
+        if(!when.users){when.idle = true;} // switch back to idle when users disconnect
+    },
+    go: function(rtt){sock.ets.emit('go', rtt);},
 }
 
 var sock = {
@@ -18,7 +29,7 @@ var sock = {
         sock.ets.on('connection', function(socket){
             var nfo = when.connected(socket.id);
             socket.on('chat', when.chat);
-            socket.on('go', when.go);
+            socket.on('go', function(text){when.go({text: text, id: socket.id});});
             socket.on('disconnect', when.disconnect);
         });
     },
