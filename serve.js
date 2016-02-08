@@ -6,20 +6,20 @@ var when = {
     users: 0,
     connected: function(socket){
         console.log(socket + ' connected');
+        sock.ets.to(socket).emit('youAre', socket); // make sure the socket knows who it is
         when.users++;
-        if(when.users > 2 && when.idle){
-            sock.ets.emit('go', {text: 'start typing!', id: 'bot'});
+        if(when.users > 1 && when.idle){
+            sock.ets.emit('go', {text: 'start typing!', id: 'server'});
             when.idle = false;
         }
         return 0;
     },
-    chat: function(text){sock.ets.emit('chat', text);},
+    chat: function(rtt){sock.ets.emit('chat', rtt);},
     disconnect: function(socket){
         console.log(socket + ' disconnected');
         when.users--;
-        if(!when.users){when.idle = true;} // switch back to idle when users disconnect
+        if(when.users < 2){when.idle = true;} // switch back to idle when users disconnect
     },
-    go: function(rtt){sock.ets.emit('go', rtt);},
 }
 
 var sock = {
@@ -28,9 +28,10 @@ var sock = {
         sock.ets = sock.ets(server);
         sock.ets.on('connection', function(socket){
             var nfo = when.connected(socket.id);
-            socket.on('chat', when.chat);
-            socket.on('go', function(text){when.go({text: text, id: socket.id});});
-            socket.on('disconnect', when.disconnect);
+            socket.on('chat', function(text){sock.ets.emit('chat', {text: text, id: socket.id});});
+            socket.on('go', function(){sock.ets.emit('go');});
+            //
+            socket.on('disconnect', function(){when.disconnect(socket.id);});
         });
     },
 }

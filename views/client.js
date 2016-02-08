@@ -35,37 +35,35 @@ var hist = {
     },
     chat: function(rtt){
         $('#dialog' + hist.row).html(rtt.text);               // incomming chat dialog
-        $('#timer' + hist.row).html(rtt.id ? rtt.id : '???'); // set id of incoming message
-    },
-    open: function(rtt){
-        if(hist.row === NUM_ENTRIES){ hist.scoot(); }
-        else{ hist.increment(); }
-        hist.chat(rtt);
+        $('#timer' + hist.row).html(rtt.id ? rtt.id : '???'); // set id of incoming message if rtt.id provided else '???'
     },
 }
 
 var send = {
     block: true,
     justTyped: false,
-    go: function(rtt){
+    go: function(){
+        send.block = false;
+        if(hist.row === NUM_ENTRIES){ hist.scoot(); }
+        else{ hist.increment(); }
+        //
         if(check.timer){clearTimeout(check.timer);}
         check.timer = setTimeout(check.forMyTurn, SECOND);
-        hist.open(rtt);
     },
     input: function(){
         if(send.block || send.justTyped){$('#textEntry').val('');} // block input
         else{
             var text = $('#textEntry').val();
-            if(text[text.length-1] === ' '){    // if the last letter is equal to space
-                hist.chat(text);
+            if(text.length > 3 && text[text.length-1] === " "){    // if the last letter is equal to space
                 sock.et.emit("chat", text);
             }
         }
     },
     pass: function(){
-        if(!send.block){
-            send.justTyped = true;                     // we just typed something give others a chance
-            sock.et.emit('go', $('#textEntry').val()); // signify to our friends they can take the helm
+        if(!send.block || !send.justTyped){
+            sock.et.emit('chat', $('#textEntry').val());
+            send.justTyped = true;                     // just completed our thought, give others a chance
+            sock.et.emit('go');                        // signify to our friends they can take the helm
         }
     },
     enter: function(event){if(!send.block && event.which === 13){send.pass();}}
@@ -79,10 +77,20 @@ var PAUSE_TIMEOUT = 4; // inactivity timeout
 var check = {
     timer: 0,
     elapsed: 0,
+    whoami: '',
+    in: function(id){
+        check.whoami = id;
+        console.log('Im ' + check.whoami);
+    },
     forMyTurn: function(){
         check.elapsed++; // decrement time
-        if(check.elapsed > OPEN_HELM){send.block = false;}
-        if(check.elapsed > COURTESY){send.justTyped = false;}
+        if(send.block && check.elapsed > OPEN_HELM){send.block = false;}
+        if(send.justTyped && check.elapsed > COURTESY){
+            console.log('you can type again');
+            send.justTyped = false;
+        }
+        //
+        check.timer = setTimeout(check.forMyTurn, SECOND);
     },
 }
 
@@ -92,6 +100,8 @@ var sock = {
     init: function(){
         sock.et.on('chat', hist.chat);
         sock.et.on('go', send.go);
+        sock.et.on('youAre', check.in);
+        sock.et.on('connect', function(){console.log('connected');});
     }
 }
 
