@@ -7,12 +7,11 @@ var AVG_DURRATION = 5;            // Amount of speed entries accepted before ave
 var MESSAGE_TIMEOUT = 45;         // timeout for messages
 var NUM_ENTRIES = 6;              // number of dialog rows allowed in the application
 var NUM_TIMERS = NUM_ENTRIES + 1; // timer 6 is for the send button
-// call NUM_ENTRIES for send button timer
-var SEND_TIMER = NUM_ENTRIES;
+var SEND_TIMER = NUM_ENTRIES;     // call NUM_ENTRIES for send button timer
+var SYSTEM_MSG = "server";        // ID of system messages
 
 var hist = {
     row: 0,                                                      // notes history row being typed in
-    active: false,                                               // notes weather someone is typing
     start: function(){                                           // prep elements
         for(var row = 0; row < NUM_ENTRIES; row++){              // remove everything that was on topic screen
             $('#button' + row).css('visibility', 'hidden');      // hide buttons
@@ -27,69 +26,94 @@ var hist = {
     },
     scoot: function(){
         for(var i = 1; i < NUM_ENTRIES; i++){
-            $( '#dialog' + ( i - 1 ) ).html( $('#dialog' + i).html() );
-            $( '#timer' + ( i - 1 ) ).html( $('#timer' + i).html() );
+            $('#dialog' + ( i - 1 )).html( $('#dialog' + i).html() );
+            $('#timer' + ( i - 1 )).html( $('#timer' + i).html() );
         }
-        $( '#dialog' + (NUM_ENTRIES - 1) ).html('');
-        $( '#timer' + (NUM_ENTRIES -1) ).html('');
+        $('#dialog' + (NUM_ENTRIES - 1)).html('');
+        $('#timer' + (NUM_ENTRIES -1)).html('');
     },
     chat: function(rtt){
         $('#dialog' + hist.row).html(rtt.text);               // incomming chat dialog
         $('#timer' + hist.row).html(rtt.id ? rtt.id : '???'); // set id of incoming message if rtt.id provided else '???'
     },
+    turnTaken: function(me){ // check if someone else is in charge of talking
+        var speaker = $('#timer'+hist.row).html();                   // who is the current speaker?
+        if(speaker === me || speaker === SYSTEM_MSG ){return false;} // I'm talking everything is good
+        else if(speaker){return true;}                               // someone else is speaking
+        else {                                                       // who the hell knows whats going on... let em talk!
+            console.log('umm... speaker is '+ speaker +'?');
+            return false;
+        }
+    },
 }
 
 var send = {
-    block: true,
+    block: false,
     justTyped: false,
     go: function(){
-        send.block = false;
+        if(send.justTyped){
+            send.setBlock(true);
+            $('#textEntry').val('');            // reset text feild
+            send.justTyped = false;
+        } else {send.setBlock(false);}
         if(hist.row === NUM_ENTRIES){ hist.scoot(); }
         else{ hist.increment(); }
-        //
-        if(check.timer){clearTimeout(check.timer);}
-        check.timer = setTimeout(check.forMyTurn, SECOND);
+        check.reset();
     },
     input: function(){
-        if(send.block || send.justTyped){$('#textEntry').val('');} // block input
-        else{
+        if(send.block){$('#textEntry').val('');} // block input
+        else {
             var text = $('#textEntry').val();
             if(text.length > 3 && text[text.length-1] === " "){    // if the last letter is equal to space
-                sock.et.emit("chat", text);
+                if(check.forGrabs){ sock.et.emit('go');}           // interuption
+                else{ sock.et.emit('chat', text); }                // typical chat
             }
         }
     },
     pass: function(){
-        if(!send.block || !send.justTyped){
-            sock.et.emit('chat', $('#textEntry').val());
-            send.justTyped = true;                     // just completed our thought, give others a chance
-            sock.et.emit('go');                        // signify to our friends they can take the helm
+        if(!send.block){
+            sock.et.emit('chat', $('#textEntry').val()); // emit last words
+            send.justTyped = true;                       // just completed our thought, give others a chance
+            sock.et.emit('go');                          // signify to our friends they can take the helm
         }
     },
-    enter: function(event){if(!send.block && event.which === 13){send.pass();}}
+    enter: function(event){if(!send.block && event.which === 13){send.pass();}},
+    setBlock: function(set){
+        send.block = set;
+        $('#sendText').html(send.block ? 'wait' : 'type');
+    }
 }
 
-var ALLOWENCE = 45;    // total before passing the helm forcably
-var OPEN_HELM = 30;    // time before helm can be taken by interuption
-var COURTESY = 4;      // double dip moritorium i.e. if no one else takes the helm after you talked you can talk again
-var PAUSE_TIMEOUT = 4; // inactivity timeout
+var ALLOWENCE = 45;        // total before passing the helm forcably
+var OPEN_HELM = 30;        // time before helm can be taken by interuption
+var COURTESY = 4;          // double dip moritorium i.e. if no one else takes the helm after you talked you can talk again
+var PAUSE_TIMEOUT = 4;     // inactivity timeout
 
 var check = {
     timer: 0,
     elapsed: 0,
+    forGrabs: false,
     whoami: '',
-    in: function(id){
-        check.whoami = id;
-        console.log('Im ' + check.whoami);
-    },
+    in: function(id){check.whoami = id;},
     forMyTurn: function(){
-        check.elapsed++; // decrement time
-        if(send.block && check.elapsed > OPEN_HELM){send.block = false;}
-        if(send.justTyped && check.elapsed > COURTESY){
-            console.log('you can type again');
-            send.justTyped = false;
-        }
-        //
+        check.elapsed++;                                                        // decrement time
+        if(!check.forGrabs && !send.block && hist.turnTaken(check.whoami)){send.setBlock(true);}
+        // stop typing if someone else beat me to the punch
+        if(!check.forGrabs && check.elapsed > OPEN_HELM){
+            if(send.block){ // check if I can interupt
+                send.setBlock(false);
+                check.forGrabs = true;
+            } else {        // check if I can be interupted
+                $('#sendText').html( check.elapsed + ' sec');
+                send.justTyped = true;
+            }
+        } //
+        check.timer = setTimeout(check.forMyTurn, SECOND);
+    },
+    reset: function(){
+        check.forGrabs = false;
+        check.elapsed = 0;
+        if(check.timer){clearTimeout(check.timer);}
         check.timer = setTimeout(check.forMyTurn, SECOND);
     },
 }
