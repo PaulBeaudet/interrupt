@@ -1,5 +1,5 @@
 {
-  "name": "interupt",
+  "name": "interrupt",
   "version": "1.0.0",
   "description": "This a realtime chat experiment",
   "main": "serve.js",
