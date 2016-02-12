@@ -9,6 +9,8 @@ var NUM_ENTRIES = 6;              // number of dialog rows allowed in the applic
 var NUM_TIMERS = NUM_ENTRIES + 1; // timer 6 is for the send button
 var SEND_TIMER = NUM_ENTRIES;     // call NUM_ENTRIES for send button timer
 var SYSTEM_MSG = "server";        // ID of system messages
+var OPEN_HELM = 25;               // time before helm can be taken by interuption
+var PAUSE_TIMEOUT = 4;            // inactivity timeout
 
 var hist = {
     row: 0,                                                      // notes history row being typed in
@@ -35,8 +37,10 @@ var hist = {
     chat: function(rtt){
         $('#dialog' + hist.row).html(rtt.text);               // incomming chat dialog
         $('#timer' + hist.row).html(rtt.id ? rtt.id : '???'); // set id of incoming message if rtt.id provided else '???'
+        $('#wpm').html(rtt.speed ? rtt.speed.toFixed(2) + ' WPM' : '');           // show speed if available
         check.idle = 0;                                       // reduce idle time to zero
         check.started = true;                                 // note dialog has started
+        send.start();                                         // note when you got the last word in
     },
     turnTaken: function(me){ // check if someone else is in charge of talking
         var speaker = $('#timer'+hist.row).html();               // who is the current speaker?
@@ -47,35 +51,44 @@ var hist = {
 }
 
 var send = {
+    empty: true,
     block: false,
     justTyped: false,
-    gogo: false,
+    lastWord: false,
     go: function(){
-        if(send.gogo){
+        send.lastWord = true;
+        if(send.justTyped){
+            var text = $('#textEntry').val();
+            sock.et.emit('chat', {text: text, speed: speed.realTime(text.length)}); // emit last words
+            $('#textEntry').val('');                     // reset text feild
+        }
+    },
+    start: function(){
+        if(send.lastWord){
             if(send.justTyped){
-                send.setBlock(true);                         // hold for this turn
+                send.setBlock(true);
                 send.justTyped = false;                      // remove my justTyped status
-            } else {send.setBlock(false);}                   // else let user type
+            } else {send.setBlock(false);}
             if(hist.row === NUM_ENTRIES){ hist.scoot(); }    // scoot row if needed
             else{ hist.increment(); }                        // move down the rows first few messages
             check.reset();                                   // reset checks
-            send.gogo = false;
-        } else {
-            if(send.justTyped){
-                sock.et.emit('chat', $('#textEntry').val()); // emit last words
-                $('#textEntry').val('');                     // reset text feild
-                sock.et.emit('go');                          // emit second go
-            }
-            send.gogo = true;
+            send.lastWord = false;
+            send.empty = true;
         }
     },
     input: function(){
         if(send.block){$('#textEntry').val('');} // block input
         else {
             var text = $('#textEntry').val();
+            if(send.empty){
+                send.empty = false;
+                speed.realTime();
+            }
             if(text.length > 3 && text[text.length-1] === " "){    // if the last letter is equal to space
                 if(check.forGrabs){ sock.et.emit('go');}           // interuption
-                else{ sock.et.emit('chat', text); }                // typical chat
+                else{ // typical chat
+                    sock.et.emit('chat', {text: text, speed: speed.realTime(text.length)});
+                }
             }
         }
     },
@@ -91,11 +104,6 @@ var send = {
         $('#sendText').html(send.block ? 'wait' : 'type');
     }
 }
-
-var ALLOWENCE = 45;        // total before passing the helm forcably
-var OPEN_HELM = 25;        // time before helm can be taken by interuption
-var COURTESY = 4;          // double dip moritorium i.e. if no one else takes the helm after you talked you can talk again
-var PAUSE_TIMEOUT = 4;     // inactivity timeout
 
 var check = {
     timer: 0,
@@ -129,8 +137,26 @@ var check = {
         check.started = false;
         check.elapsed = 0;
         check.idle = 0;
-        if(check.timer){clearTimeout(check.timer);}
+        clearTimeout(check.timer);
         check.timer = setTimeout(check.forMyTurn, SECOND);
+    },
+}
+
+// -- handles gathing speed information
+var speed = {
+    startTime: 0,
+    records: [],
+    kpm: function(totalTime, keysPressed){
+        var rate = totalTime / keysPressed; // average time taken per letter
+        var cpm = MINUTE / rate;            // clicks/characters per minute
+        return cpm / WORD;
+    },
+    realTime: function(charsEntered){
+        var time = new Date();
+        var now = time.getTime();
+        if(charsEntered){
+            return speed.kpm(now - speed.startTime, charsEntered);
+        } else { speed.startTime = now; } // no param or chars starts the clock
     },
 }
 
@@ -151,4 +177,6 @@ $(document).ready(function(){
     $('#sendButton').click(send.pass);                         // provide a button click action
     document.getElementById('textEntry').oninput = send.input; // listen for input event
     hist.start();
+    send.setBlock(false);
+    check.timer = setTimeout(check.forMyTurn, SECOND);
 });

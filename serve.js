@@ -5,10 +5,12 @@ var when = {
     idle: true,
     users: 0,
     connected: function(socket){
-        var cookieCrums = socket.request.headers.cookie.split('=');  // split correct cookie out
+        var cookieCrums = socket.request.headers.cookie.split('=');   // split correct cookie out
         var user = cookie.user(cookieCrums[cookieCrums.length - 1]);  // decrypt email from cookie, make it userID
-        console.log(user.name + ' connected id:' + socket.id);
-        sock.ets.to(socket.id).emit('youAre', user.name); // make sure the socket knows who it is
+        if(user){user = user.content.user}                            // check for existing cookie
+        else{return 0};                                               // this is a nameless (expired) socket!
+        console.log(user.name + ' connected id:' + socket.id);        // log connection event
+        sock.ets.to(socket.id).emit('youAre', user.name);             // make sure the socket knows who it is
         when.users++;
         if(when.users > 1 && when.idle){
             sock.ets.emit('go', {text: 'start typing!', id: 'server'});
@@ -16,7 +18,6 @@ var when = {
         }
         return user.name;
     },
-    chat: function(rtt){sock.ets.emit('chat', rtt);},
     disconnect: function(socket){
         console.log(socket + ' disconnected');
         when.users--;
@@ -30,7 +31,11 @@ var sock = {
         sock.ets = sock.ets(server);
         sock.ets.on('connection', function(socket){
             var name = when.connected(socket);
-            socket.on('chat', function(text){sock.ets.emit('chat', {text: text, id: name});});
+            if(!name){return;}                 // provide no services to nameless sockets
+            socket.on('chat', function(rtt){
+                rtt.id = name;                 // add name to real time chat object
+                sock.ets.emit('chat', rtt);    // emit rtt object to all clients
+            });
             socket.on('go', function(){sock.ets.emit('go');});
             //
             socket.on('disconnect', function(){when.disconnect(socket.id);});
@@ -41,7 +46,7 @@ var sock = {
 var userAct = { // dep: mongo
     auth: function ( render ){
         return function(req, res){
-            if(req.session.user.name){
+            if(req.session.user && req.session.user.name){
                 console.log(req.session.user.name + ' joined')
                 res.render(render);
             } else {res.redirect('/');}
@@ -68,8 +73,7 @@ var cookie = { // depends on client-sessions and mongo
     },
     meWant: function (){return cookie.session(cookie.ingredients);},
     user: function (content){
-        var result = cookie.session.util.decode(cookie.ingredients, content);
-        return result.content.user;
+        return cookie.session.util.decode(cookie.ingredients, content);
     },
 }
 
