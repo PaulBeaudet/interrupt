@@ -9,7 +9,7 @@
     "start": "node serve.js"
   },
   "author": "Paul Beaudet",
-  "license": "GPL_AFFERO",
+  "license": "AGPL-1.0",
   "dependencies": {
     "bower": "1.5.3",
     "bcryptjs": "^2.3.0",

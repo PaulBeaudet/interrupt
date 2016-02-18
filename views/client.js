@@ -86,9 +86,7 @@ var send = {
             }
             if(text.length > 3 && text[text.length-1] === " "){    // if the last letter is equal to space
                 if(check.forGrabs){ sock.et.emit('go');}           // interuption
-                else{ // typical chat
-                    sock.et.emit('chat', {text: text, speed: speed.realTime(text.length)});
-                }
+                else{ sock.et.emit('chat', {text: text, speed: speed.realTime(text.length)}); } // typical chat
             }
         }
     },
