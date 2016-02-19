@@ -61,6 +61,7 @@ var send = {
             var text = $('#textEntry').val();
             sock.et.emit('chat', {text: text, speed: speed.realTime(text.length)}); // emit last words
             $('#textEntry').val('');                     // reset text feild
+            send.empty = true;
         }
     },
     start: function(){
@@ -73,7 +74,6 @@ var send = {
             else{ hist.increment(); }                        // move down the rows first few messages
             check.reset();                                   // reset checks
             send.lastWord = false;
-            send.empty = true;
         }
     },
     input: function(){
