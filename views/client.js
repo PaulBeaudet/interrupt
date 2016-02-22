@@ -1,9 +1,6 @@
 // client.js ~ Copyright 2015 Paul Beaudet ~ MIT License see LICENSE_MIT for detials
 
-var MINUTE = 60000;               // Milliseconds in a minute
 var SECOND = 1000;                // MILLISECONDS in a second
-var WORD = 5;                     // Characters per averange word
-var AVG_DURRATION = 5;            // Amount of speed entries accepted before averanging
 var MESSAGE_TIMEOUT = 45;         // timeout for messages
 var NUM_ENTRIES = 6;              // number of dialog rows allowed in the application
 var NUM_TIMERS = NUM_ENTRIES + 1; // timer 6 is for the send button
@@ -16,8 +13,6 @@ var hist = {
     row: 0,                                                      // notes history row being typed in
     start: function(){                                           // prep elements
         for(var row = 0; row < NUM_ENTRIES; row++){              // remove everything that was on topic screen
-            $('#button' + row).css('visibility', 'hidden');      // hide buttons
-            $('#timer' + row).css('visibility', 'visible');      // make timers visible
             $('#dialog' + row).html('');                         // clear previous hist
         }
     },
@@ -142,19 +137,13 @@ var check = {
 
 // -- handles gathing speed information
 var speed = {
-    startTime: 0,
-    records: [],
-    kpm: function(totalTime, keysPressed){
-        var rate = totalTime / keysPressed; // average time taken per letter
-        var cpm = MINUTE / rate;            // clicks/characters per minute
-        return cpm / WORD;
-    },
-    realTime: function(charsEntered){
+    start: 0,
+    realTime: function(numberOfChars){
         var time = new Date();
         var now = time.getTime();
-        if(charsEntered){
-            return speed.kpm(now - speed.startTime, charsEntered);
-        } else { speed.startTime = now; } // no param or chars starts the clock
+        if(numberOfChars){
+            return 60000/((now - speed.start)/numberOfChars)/5; // return raw words per minute
+        } else { speed.start = now; } // no param or chars starts the clock
     },
 }
 
@@ -165,7 +154,6 @@ var sock = {
         sock.et.on('chat', hist.chat);
         sock.et.on('go', send.go);
         sock.et.on('youAre', check.in);
-        sock.et.on('connect', function(){console.log('connected');});
     }
 }
 
@@ -174,7 +162,7 @@ $(document).ready(function(){
     $('#textEntry').keydown(send.enter);                       // capture special key like enter
     $('#sendButton').click(send.pass);                         // provide a button click action
     document.getElementById('textEntry').oninput = send.input; // listen for input event
-    hist.start();
+    // hist.start();
     send.setBlock(false);
     check.timer = setTimeout(check.forMyTurn, SECOND);
 });
