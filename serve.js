@@ -67,14 +67,10 @@ var cookie = { // depends on client-sessions and mongo
     ingredients: {
         cookieName: 'session',
         secret: process.env.SESSION_SECRET,
-        duration: 8 * 60 * 60 * 1000,  // cookie times out in 8 hours
-        activeDuration: 5 * 60 * 1000, // activity extends durration 5 minutes
-        httpOnly: true,                // block browser access to cookies... defaults to this anyhow
+        duration: 5 * 365 * 24 * 60 * 60 * 1000,  // cookie times out in 5 years
     },
-    meWant: function (){return cookie.session(cookie.ingredients);},
-    user: function (content){
-        return cookie.session.util.decode(cookie.ingredients, content);
-    },
+    meWant: function(){return cookie.session(cookie.ingredients);},
+    user: function(content){return cookie.session.util.decode(cookie.ingredients, content);},
 }
 
 var serve = {
